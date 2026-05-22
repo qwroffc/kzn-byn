@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>KZT / BYN</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet"/>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%;
+    background: #000; color: #fff;
+    font-family: 'Bebas Neue', sans-serif;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    overflow: hidden; user-select: none;
+  }
+  .pair {
+    display: flex; align-items: center; gap: 18px; padding: 10px 0;
+  }
+  .label {
+    font-size: clamp(16px, 3vw, 34px);
+    letter-spacing: 0.1em;
+    color: rgba(255,255,255,0.35);
+    white-space: nowrap;
+  }
+  .value {
+    font-size: clamp(34px, 7.5vw, 86px);
+    letter-spacing: 0.04em; line-height: 1;
+    transition: opacity 0.1s;
+  }
+  .value.dim { opacity: 0.1; }
+  .arrow-svg {
+    width: clamp(20px, 3.8vw, 42px); height: clamp(20px, 3.8vw, 42px);
+    flex-shrink: 0;
+    transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+  }
+  .divider {
+    width: min(88vw, 680px); height: 1px;
+    background: rgba(255,255,255,0.08); margin: 10px 0;
+  }
+  #footer {
+    display: flex; align-items: center; gap: 18px; margin-top: 28px;
+    font-size: clamp(11px, 1.6vw, 15px);
+    letter-spacing: 0.12em; color: rgba(255,255,255,0.22);
+  }
+  #timer-bar-wrap {
+    width: 60px; height: 2px;
+    background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden;
+  }
+  #timer-bar {
+    height: 100%; width: 100%; background: #fff;
+    border-radius: 2px; transform-origin: left;
+  }
+</style>
+</head>
+<body>
+
+<div class="pair">
+  <span class="label">1 ТЕНГЕ</span>
+  <span class="value" id="val-kzt">—</span>
+  <span class="label">БЕЛ РУБ</span>
+  <svg class="arrow-svg" id="arrow-kzt" viewBox="0 0 40 40" fill="none">
+    <polyline points="8,26 20,10 32,26"
+      stroke="rgba(255,255,255,0.2)" stroke-width="4.5"
+      stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </svg>
+</div>
+
+<div class="divider"></div>
+
+<div class="pair">
+  <span class="label">1 БЕЛ РУБ</span>
+  <span class="value" id="val-byn">—</span>
+  <span class="label">ТЕНГЕ</span>
+  <svg class="arrow-svg" id="arrow-byn" viewBox="0 0 40 40" fill="none">
+    <polyline points="8,26 20,10 32,26"
+      stroke="rgba(255,255,255,0.2)" stroke-width="4.5"
+      stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </svg>
+</div>
+
+<div id="footer">
+  <span id="updated">ЗАГРУЗКА...</span>
+  <div id="timer-bar-wrap"><div id="timer-bar"></div></div>
+  <span id="countdown">30С</span>
+</div>
+
+<script>
+const valKzt  = document.getElementById('val-kzt');
+const valByn  = document.getElementById('val-byn');
+const svgKzt  = document.getElementById('arrow-kzt');
+const svgByn  = document.getElementById('arrow-byn');
+const polyKzt = svgKzt.querySelector('polyline');
+const polyByn = svgByn.querySelector('polyline');
+const updEl   = document.getElementById('updated');
+const countEl = document.getElementById('countdown');
+const timerBar= document.getElementById('timer-bar');
+
+const GREEN  = '#00e676';
+const RED    = '#ff1744';
+const RELOAD = 30;
+
+let prevKzt     = null;
+let secondsLeft = RELOAD;
+
+function setArrow(svg, poly, up) {
+  poly.setAttribute('stroke', up ? GREEN : RED);
+  svg.style.transform = up ? 'rotate(0deg)' : 'rotate(180deg)';
+}
+
+async function fetchLatest() {
+  try {
+    const res  = await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/kzt.json');
+    const data = await res.json();
+    return data.kzt?.byn ?? null;
+  } catch { return null; }
+}
+
+async function update() {
+  const kztToByn = await fetchLatest();
+  if (!kztToByn) { updEl.textContent = 'ОШИБКА'; return; }
+
+  const bynToKzt = 1 / kztToByn;
+  const upKzt    = prevKzt === null ? true : kztToByn >= prevKzt;
+  prevKzt        = kztToByn;
+
+  [valKzt, valByn].forEach(el => el.classList.add('dim'));
+  setTimeout(() => {
+    valKzt.textContent = kztToByn.toFixed(6);
+    valByn.textContent = bynToKzt.toFixed(2);
+    [valKzt, valByn].forEach(el => el.classList.remove('dim'));
+    setArrow(svgKzt, polyKzt, upKzt);
+    setArrow(svgByn, polyByn, !upKzt);
+    updEl.textContent = 'ОБНОВЛЕНО ' + new Date().toLocaleTimeString('ru-RU');
+    resetTimer();
+  }, 120);
+}
+
+function resetTimer() {
+  secondsLeft = RELOAD;
+  timerBar.style.transition = 'none';
+  timerBar.style.transform  = 'scaleX(1)';
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    timerBar.style.transition = `transform ${RELOAD}s linear`;
+    timerBar.style.transform  = 'scaleX(0)';
+  }));
+}
+
+setInterval(() => {
+  secondsLeft = Math.max(0, secondsLeft - 1);
+  countEl.textContent = secondsLeft + 'С';
+}, 1000);
+
+update();
+setInterval(update, RELOAD * 1000);
+</script>
+</body>
+</html>
